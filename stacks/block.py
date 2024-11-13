@@ -1,5 +1,6 @@
 import struct
 import datetime
+from .hashing import sha512_256
 
 
 class Block:
@@ -20,26 +21,30 @@ class Block:
 
         self.miner_signature = self.next_hex(65)
 
+        block_header_end = self.pos
+
         signer_signature_len = self.next_u32()
 
         self.signer_signature = []
         for i in range(0, signer_signature_len):
             self.signer_signature.append(self.next_hex(65))
 
+        pox_treatment_start = self.pos
+
         pox_treatment_len = self.next_u16()
 
-        (pox_treatment_data_len,) = struct.unpack(
-            ">I", self.data[self.pos : self.pos + 4]
-        )
-        self.pos += 4
+        pox_treatment_data_len = self.next_u32()
 
         self.pos += pox_treatment_data_len
+
+        pox_treatment_end = self.pos
 
         self.txs = []
 
         txs_len = self.next_u32()
 
         for i in range(0, txs_len):
+            tx_offset = self.pos
             tx = {}
             tx["version"] = format(self.next_u8(), "02x")
 
@@ -102,6 +107,26 @@ class Block:
 
             self.txs.append(tx)
 
+            tx_data = self.data[tx_offset : tx_offset + self.pos]
+
+            tid = sha512_256(tx_data)
+            tid_node = sha512_256(b"\x00")
+            tid_node.update(tid.digest())
+            tid_merkle_root = sha512_256(b"\x01")
+            tid_merkle_root.update(tid_node.digest() + tid_node.digest())
+
+            print(
+                "TX size:",
+                self.pos - tx_offset,
+                "tid:",
+                tid.hexdigest(),
+                "merkle root:",
+                tid_merkle_root.hexdigest(),
+            )
+
+        block_hash = sha512_256(self.data[:block_header_end])
+        block_hash.update(self.data[pox_treatment_start:pox_treatment_end])
+        print("block hash:", block_hash.hexdigest())
         print("version:", self.version)
         print("chain_length:", self.chain_length)
         print("burn_spent:", self.burn_spent)
