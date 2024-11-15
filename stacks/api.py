@@ -7,5 +7,5 @@ class Api:
         self.base_url = base_url
 
     def get_block_by_height(self, height):
-        with urllib.request.urlopen(self.base_url + '/v3/blockbyheight/{}'.format(height)) as response:
+        with urllib.request.urlopen(self.base_url + '/v3/blocks/height/{}'.format(height)) as response:
             return response.read()
