@@ -1,9 +1,11 @@
 import struct
 import datetime
 from .hashing import sha512_256
+from .address import c32_encode
+from .serializable import Serializable
 
 
-class Block:
+class Block(Serializable):
 
     def __init__(self, data):
         self.data = data
@@ -57,19 +59,13 @@ class Block:
             self.pos += 1
 
             if transaction_auth_type == 0x04:
-                tx["hash_mode"] = format(self.data[self.pos], "02x")
-                self.pos += 1
-                tx["signer"] = "".join(
-                    format(x, "02x") for x in self.data[self.pos : self.pos + 20]
-                )
-                self.pos += 20
+                tx["hash_mode"] = self.next_u8()
+                signer = c32_encode(26, self.next_blob(20))
+                tx["signer"] = signer
 
-                (tx["nonce"],) = struct.unpack(">Q", self.data[self.pos : self.pos + 8])
-                self.pos += 8
-                (tx["fee"],) = struct.unpack(">Q", self.data[self.pos : self.pos + 8])
-                self.pos += 8
-                tx["key_encoding"] = format(self.data[self.pos], "02x")
-                self.pos += 1
+                tx["nonce"] = self.next_u64()
+                tx["fee"] = self.next_u64()
+                tx["key_encoding"] = self.next_u8()
                 tx["signature"] = self.next_hex(65)
                 tx["anchor_mode"] = format(self.data[self.pos], "02x")
                 self.pos += 1
@@ -97,6 +93,13 @@ class Block:
                     tx["clarity_version"] = format(self.next_u8(), "02x")
                     tx["contract_name"] = self.next_contract_name()
                     tx["code_body"] = self.next_stacks_string()
+                elif payload_type == 0:
+                    print("PAYLOAD: ", self.data[self.pos :])
+                    tx["principal_type"] = self.next_u8()
+                    tx["principal_type2"] = self.next_u8()
+                    tx["principal"] = c32_encode(26, self.next_blob(20))
+                    tx["amount"] = self.next_u64()
+                    tx["memo"] = self.next_hex(34)
                 else:
                     raise Exception("unsupported payload_type {}".format(payload_type))
 
@@ -140,46 +143,3 @@ class Block:
         print("pox_treatment:", pox_treatment_len)
         print("txs:", self.txs)
         print(self.data[self.pos :])
-
-    def next_u8(self):
-        value = self.data[self.pos]
-        self.pos += 1
-        return value
-
-    def next_u16(self):
-        (value,) = struct.unpack(">H", self.data[self.pos : self.pos + 2])
-        self.pos += 2
-        return value
-
-    def next_u32(self):
-        (value,) = struct.unpack(">I", self.data[self.pos : self.pos + 4])
-        self.pos += 4
-        return value
-
-    def next_u64(self):
-        (value,) = struct.unpack(">Q", self.data[self.pos : self.pos + 8])
-        self.pos += 8
-        return value
-
-    def next_hex(self, bytes_len):
-        output = "".join(
-            format(x, "02x") for x in self.data[self.pos : self.pos + bytes_len]
-        )
-        self.pos += bytes_len
-        return "0x" + output
-
-    def next_contract_name(self):
-        contract_name_len = self.next_u8()
-        contract_name = self.data[self.pos : self.pos + contract_name_len].decode(
-            "ascii"
-        )
-        self.pos += contract_name_len
-        return contract_name
-
-    def next_stacks_string(self):
-        stacks_string_len = self.next_u32()
-        stacks_string = self.data[self.pos : self.pos + stacks_string_len].decode(
-            "utf8"
-        )
-        self.pos += stacks_string_len
-        return stacks_string
