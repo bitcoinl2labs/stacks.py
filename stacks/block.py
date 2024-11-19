@@ -3,6 +3,7 @@ import datetime
 from .hashing import sha512_256
 from .address import c32_encode
 from .serializable import Serializable
+from .transaction import Transaction
 
 
 class Block(Serializable):
@@ -47,16 +48,14 @@ class Block(Serializable):
 
         for i in range(0, txs_len):
             tx_offset = self.pos
+            tx = Transaction.from_serializable(self)
+            """
             tx = {}
-            tx["version"] = format(self.next_u8(), "02x")
+            tx["version"] = self.next_u8()
 
-            tx["chain_id"] = "".join(
-                format(x, "02x") for x in self.data[self.pos : self.pos + 4]
-            )
-            self.pos += 4
+            tx["chain_id"] = self.next_u32()
 
-            transaction_auth_type = self.data[self.pos]
-            self.pos += 1
+            transaction_auth_type = self.next_u8()
 
             if transaction_auth_type == 0x04:
                 tx["hash_mode"] = self.next_u8()
@@ -107,7 +106,7 @@ class Block(Serializable):
                 pass
             else:
                 raise Exception("invalid transaction auth")
-
+            """
             self.txs.append(tx)
 
             tx_data = self.data[tx_offset : tx_offset + self.pos]

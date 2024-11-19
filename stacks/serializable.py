@@ -1,6 +1,16 @@
 import struct
 
 
+def hex_to_bytes(hex_data):
+    return b"".join(
+        [bytes((int(hex_data[i : i + 2], 16),)) for i in range(0, len(hex_data), 2)]
+    )
+
+
+def bytes_to_hex(data):
+    return "".join(format(x, "02x") for x in data)
+
+
 class Serializable:
     def next_u8(self):
         value = self.data[self.pos]
@@ -21,13 +31,6 @@ class Serializable:
         (value,) = struct.unpack(">Q", self.data[self.pos : self.pos + 8])
         self.pos += 8
         return value
-
-    def next_hex(self, bytes_len):
-        output = "".join(
-            format(x, "02x") for x in self.data[self.pos : self.pos + bytes_len]
-        )
-        self.pos += bytes_len
-        return "0x" + output
 
     def next_blob(self, bytes_len):
         output = self.data[self.pos : self.pos + bytes_len]
