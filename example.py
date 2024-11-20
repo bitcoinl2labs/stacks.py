@@ -1,9 +1,9 @@
-from stacks.api import Api
-from stacks.block import Block
+from stacks import Api
+from stacks import Block
 from stacks.keys import generate_signing_and_verify_key
 from stacks.hashing import ripemd160
-from stacks.transaction import Transaction
-from stacks.serializable import hex_to_bytes
+from stacks import Transaction
+from stacks.utils import hex_to_bytes
 import sys
 
 
@@ -20,7 +20,7 @@ print(tx)
 tx_data = hex_to_bytes(tx['tx'])
 print(tx_data)
 
-transaction = Transaction().from_bytes(tx_data)
+transaction = Transaction.from_bytes(tx_data)
 print(transaction)
 
 """

@@ -1,54 +1,53 @@
-import struct
 import datetime
 from .hashing import sha512_256
 from .address import c32_encode
-from .serializable import Serializable
 from .transaction import Transaction
 
 
-class Block(Serializable):
+class Block:
 
-    def __init__(self, data):
-        self.data = data
-        self.pos = 0
-        self.version = self.next_u8()
-        self.chain_length = self.next_u64()
-        self.burn_spent = self.next_u64()
+    def __init__(self):
+       pass
+    
+    def fill_from_stream(self, stream):
+        self.version = stream.next_u8()
+        self.chain_length = stream.next_u64()
+        self.burn_spent = stream.next_u64()
 
-        self.consensus_hash = self.next_hex(20)
-        self.parent_block_id = self.next_hex(32)
-        self.tx_merkle_root = self.next_hex(32)
-        self.state_index_root = self.next_hex(32)
+        self.consensus_hash = stream.next_blob(20)
+        self.parent_block_id = stream.next_blob(32)
+        self.tx_merkle_root = stream.next_blob(32)
+        self.state_index_root = stream.next_blob(32)
 
-        self.timestamp = self.next_u64()
+        self.timestamp = stream.next_u64()
 
-        self.miner_signature = self.next_hex(65)
+        self.miner_signature = stream.next_blob(65)
 
-        block_header_end = self.pos
+        block_header_end = stream.pos
 
-        signer_signature_len = self.next_u32()
+        signer_signature_len = stream.next_u32()
 
         self.signer_signature = []
         for i in range(0, signer_signature_len):
-            self.signer_signature.append(self.next_hex(65))
+            self.signer_signature.append(stream.next_blob(65))
 
-        pox_treatment_start = self.pos
+        pox_treatment_start = stream.pos
 
-        pox_treatment_len = self.next_u16()
+        pox_treatment_len = stream.next_u16()
 
-        pox_treatment_data_len = self.next_u32()
+        pox_treatment_data_len = stream.next_u32()
 
-        self.pos += pox_treatment_data_len
+        stream.pos += pox_treatment_data_len
 
-        pox_treatment_end = self.pos
+        pox_treatment_end = stream.pos
 
         self.txs = []
 
-        txs_len = self.next_u32()
+        txs_len = stream.next_u32()
 
         for i in range(0, txs_len):
             tx_offset = self.pos
-            tx = Transaction.from_serializable(self)
+            tx = Transaction.from_stream(stream)
             """
             tx = {}
             tx["version"] = self.next_u8()
@@ -142,3 +141,23 @@ class Block(Serializable):
         print("pox_treatment:", pox_treatment_len)
         print("txs:", self.txs)
         print(self.data[self.pos :])
+        
+    def block_hash(self):
+        """
+        write_next(fd, &self.version)?;
+        write_next(fd, &self.chain_length)?;
+        write_next(fd, &self.burn_spent)?;
+        write_next(fd, &self.consensus_hash)?;
+        write_next(fd, &self.parent_block_id)?;
+        write_next(fd, &self.tx_merkle_root)?;
+        write_next(fd, &self.state_index_root)?
+        write_next(fd, &self.timestamp)?;
+        write_next(fd, &self.miner_signature)?;
+        write_next(fd, &self.pox_treatment)?;
+        Ok(Sha512Trunc256Sum::from_hasher(hasher))
+        """
+        
+    def block_id(self):
+        """
+        StacksBlockId::new(&self.consensus_hash, &self.block_hash())
+        """

@@ -1,17 +1,12 @@
 import struct
 
 
-def hex_to_bytes(hex_data):
-    return b"".join(
-        [bytes((int(hex_data[i : i + 2], 16),)) for i in range(0, len(hex_data), 2)]
-    )
+class Stream:
 
+    def __init__(self, data, offset=0):
+        self.data = data
+        self.pos = offset
 
-def bytes_to_hex(data):
-    return "".join(format(x, "02x") for x in data)
-
-
-class Serializable:
     def next_u8(self):
         value = self.data[self.pos]
         self.pos += 1
@@ -52,3 +47,15 @@ class Serializable:
         )
         self.pos += stacks_string_len
         return stacks_string
+
+    def write_u8(self, u8):
+        self.data += struct.pack("B", u8)
+
+    def write_u16(self, u8):
+        self.data += struct.pack(">H", u8)
+
+    def write_u32(self, u8):
+        self.data += struct.pack(">I", u8)
+
+    def write_u64(self, u8):
+        self.data += struct.pack(">Q", u8)
