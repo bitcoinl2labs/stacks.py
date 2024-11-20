@@ -10,9 +10,9 @@ import sys
 private_key, public_key = generate_signing_and_verify_key()
 
 api = Api()
-#data = api.get_block_by_height(int(sys.argv[1]))
-#print(data)
-#Block(data)
+data = api.get_block_by_height(int(sys.argv[1]))
+print(data)
+Block(data)
 
 tx = api.get_transaction('65c036b923f1f0017bbc3d5bdb078b4cf797032a8a5c613c89a16b7aeba3bb7a')
 print(tx)

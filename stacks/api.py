@@ -3,23 +3,39 @@ import urllib.request
 import json
 
 
+class StacksHttpException(Exception):
+    pass
+
+
+class StacksHttpTimeoutException(Exception):
+    pass
+
+
 class Api:
 
-    def __init__(self, base_url="http://localhost:20443"):
+    def __init__(self, base_url="http://localhost:20443", timeout=30):
         self.base_url = base_url
+        self.timeout = timeout
 
-    def get_block_by_height(self, height):
+    def request_get(self, path):
         try:
             with urllib.request.urlopen(
-                self.base_url + "/v3/blocks/height/{}".format(height)
+                self.base_url + path, timeout=self.timeout
             ) as response:
                 return response.read()
         except urllib.error.HTTPError as error:
-            print(error.status, error.reason, error.fp.read())
+            raise StacksHttpException(
+                "{} {}: {}".format(error.status, error.reason, error.fp.read().decode())
+            ) from None
         except urllib.error.URLError as error:
-            print(error.reason)
+            raise StacksHttpException(
+                "{} {}: {}".format(error.status, error.reason, error.fp.read().decode())
+            ) from None
         except TimeoutError:
-            print("Request timed out")
+            raise StacksHttpTimeoutException()
+
+    def get_block_by_height(self, height):
+        return self.request_get("/v3/blocks/height/{}".format(height))
 
     def post_transaction(self, transaction):
         content = transaction.serialize()
@@ -40,14 +56,4 @@ class Api:
             print("Request timed out")
 
     def get_transaction(self, txid):
-        try:
-            with urllib.request.urlopen(
-                self.base_url + "/v3/transactions/{}".format(txid)
-            ) as response:
-                return json.loads(response.read())
-        except urllib.error.HTTPError as error:
-            print(error.status, error.reason, error.fp.read())
-        except urllib.error.URLError as error:
-            print(error.reason)
-        except TimeoutError:
-            print("Request timed out")
+        return self.request_get("/v3/transactions/{}".format(txid))
