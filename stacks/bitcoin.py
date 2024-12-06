@@ -99,15 +99,21 @@ class Transaction(Streamable, JSON):
             }
 
     def __init__(
-        self, version=2, flag=0x0100, inputs=[], outputs=[], witnesses=[], locktime=0
+        self,
+        version=2,
+        flag=0x0100,
+        inputs=None,
+        outputs=None,
+        witnesses=None,
+        locktime=0,
     ):
         self.version = version
         self.flag = flag
-        self.number_of_inputs = len(inputs)
-        self.inputs = inputs
-        self.number_of_outputs = len(outputs)
-        self.outputs = outputs
-        self.witnesses = witnesses
+        self.inputs = inputs if inputs else []
+        self.number_of_inputs = len(self.inputs)
+        self.outputs = outputs if outputs else []
+        self.number_of_outputs = len(self.outputs)
+        self.witnesses = witnesses if witnesses else []
         self.locktime = locktime
 
     def fill_stream(self, stream):
@@ -153,12 +159,12 @@ class Transaction(Streamable, JSON):
         previous_index,
         script=bytes(32),
         sequence=0xFFFFFFFF,
-        witness=[],
+        witness=None,
     ):
         tx_input = Transaction.Input(previous_txid, previous_index, script, sequence)
         self.number_of_inputs += 1
         self.inputs.append(tx_input)
-        self.witnesses.append(witness)
+        self.witnesses.append(witness if witness else [])
         return tx_input
 
     def add_output(self, amount, script):
@@ -324,12 +330,12 @@ class Api:
         self.password = password
         self.timeout = timeout
 
-    def json_rpc(self, json_rpc_method, params=[]):
+    def json_rpc(self, json_rpc_method, params=None):
         json_rpc_dict = {
             "jsonrpc": "1.0",
             "id": "stacks.py",
             "method": json_rpc_method,
-            "params": params,
+            "params": params if params else [],
         }
         content = json.dumps(json_rpc_dict)
         request = urllib.request.Request(
