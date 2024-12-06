@@ -3,7 +3,7 @@ from stacks.keys import generate_signing_and_verify_key, get_verifying_key, sign
 from stacks.utils import hex_to_bytes, bytes_to_hex
 
 
-class StreamTest(unittest.TestCase):
+class KeysTest(unittest.TestCase):
 
     def test_generation(self):
         private, public = generate_signing_and_verify_key()

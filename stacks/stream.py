@@ -58,10 +58,23 @@ class Stream:
         if b == 0xFF:
             return self.read_u64_le()
 
-    def read_blob(self, bytes_len):
+    def write_varint_le(self, value):
+        if value < 0xFD:
+            self.write_u8(value)
+        elif value <= 0xFFFF:
+            self.write_u8(0xFD)
+            self.write_u16_le(value)
+        elif value <= 0xFFFFFFFF:
+            self.write_u8(0xFE)
+            self.write_u32_le(value)
+        else:
+            self.write_u8(0xFF)
+            self.write_u64_le(value)
+
+    def read_bytes(self, bytes_len):
         output = self.data[self.pos : self.pos + bytes_len]
         self.pos += bytes_len
-        return output
+        return bytes(output)
 
     def read_contract_name(self):
         contract_name_len = self.next_u8()
@@ -107,6 +120,14 @@ class Stream:
         self.data[self.pos : self.pos] += struct.pack("<Q", u64)
         self.pos += 8
 
+    def write_stream(self, stream, offset=0):
+        self.data[self.pos : self.pos] += stream.data[offset:]
+        self.pos += len(stream.data) - offset
+
+    def write_bytes(self, _bytes):
+        self.data[self.pos : self.pos] += _bytes
+        self.pos += len(_bytes)
+
 
 class Streamable:
 
@@ -120,3 +141,11 @@ class Streamable:
     def from_bytes(cls, data, offset=0):
         stream = Stream(data, offset)
         return cls.from_stream(stream)
+
+    def to_stream(self):
+        s = Stream()
+        self.fill_stream(s)
+        return s
+
+    def to_bytes(self):
+        return bytes(self.to_stream().data)

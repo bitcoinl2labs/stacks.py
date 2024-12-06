@@ -11,6 +11,10 @@ def bytes_to_hex(data):
     return "".join(format(x, "02x") for x in data)
 
 
+def bytes_to_hex_reversed(data):
+    return bytes_to_hex(reversed(data))
+
+
 class JSON:
 
     def to_json(self):
