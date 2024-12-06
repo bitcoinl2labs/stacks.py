@@ -1,5 +1,5 @@
 import struct
-import json
+from .utils import bytes_to_hex
 from struct import error as StreamError
 
 
@@ -149,3 +149,6 @@ class Streamable:
 
     def to_bytes(self):
         return bytes(self.to_stream().data)
+
+    def to_hex(self):
+        return bytes_to_hex(self.to_bytes())
