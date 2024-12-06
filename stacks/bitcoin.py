@@ -13,6 +13,13 @@ class Transaction(Streamable, JSON):
             self.txin_script = stream.read_bytes(self.txin_script_length)
             self.sequence_no = stream.read_u32_le()
 
+        def fill_stream(self, stream):
+            stream.write_bytes(self.previous_txid)
+            stream.write_u32_le(self.previous_txout_index)
+            stream.write_varint_le(self.txin_script_length)
+            stream.write_bytes(self.txin_script)
+            stream.write_u32_le(self.sequence_no)
+
         def to_dict(self):
             return {
                 "txid": bytes_to_hex_reversed(self.previous_txid),
@@ -85,13 +92,8 @@ class Transaction(Streamable, JSON):
         stream = Stream()
         stream.write_u32_le(self.version)
         stream.write_varint_le(self.number_of_inputs)
-        # we cannot use tx_input.to_stream() as the ScriptSig must be removed from the txid
         for tx_input in self.inputs:
-            stream.write_bytes(tx_input.previous_txid)
-            stream.write_u32_le(tx_input.previous_txout_index)
-            # 0-sized scriptsig
-            stream.write_u8(0)
-            stream.write_u32_le(tx_input.sequence_no)
+            stream.write_stream(tx_input.to_stream())
         stream.write_varint_le(self.number_of_outputs)
         for tx_output in self.outputs:
             stream.write_stream(tx_output.to_stream())
@@ -103,13 +105,8 @@ class Transaction(Streamable, JSON):
         stream.write_u32_le(self.version)
         stream.write_u16_le(self.flag)
         stream.write_varint_le(self.number_of_inputs)
-        # we cannot use tx_input.to_stream() as the ScriptSig must be removed from the txid
         for tx_input in self.inputs:
-            stream.write_bytes(tx_input.previous_txid)
-            stream.write_u32_le(tx_input.previous_txout_index)
-            # 0-sized scriptsig
-            stream.write_u8(0)
-            stream.write_u32_le(tx_input.sequence_no)
+            stream.write_stream(tx_input.to_stream())
         stream.write_varint_le(self.number_of_outputs)
         for tx_output in self.outputs:
             stream.write_stream(tx_output.to_stream())
