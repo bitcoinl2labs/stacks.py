@@ -1,11 +1,40 @@
 from .stream import Stream, Streamable
-from .utils import bytes_to_hex, bytes_to_hex_reversed, JSON
+from .utils import bytes_to_hex, bytes_to_hex_reversed, JSON, hex_to_bytes_reversed
 from .hashing import sha256, ripemd160
 import datetime
+import urllib
+import json
+import base64
 
 
 def pay_to_witness_public_key_hash(public_key):
     return b"\x00\x14" + ripemd160(public_key).digest()
+
+
+def witness_commitment(wtxids):
+    return (
+        b"\x6a\x24\xaa\x21\xa9\xed"
+        + sha256(
+            sha256(merkle_root([bytes(32)] + wtxids) + bytes(32)).digest()
+        ).digest()
+    )
+
+
+def merkle_root(items):
+    if not items:
+        return bytes(32)
+    hashes = [item for item in items]
+    while len(hashes) > 1:
+        if len(hashes) % 2 == 1:
+            hashes.append(hashes[-1])
+
+        merged_hashes = []
+        for i in range(0, len(hashes), 2):
+            merged_hashes.append(
+                sha256(sha256(hashes[i] + hashes[i + 1]).digest()).digest()
+            )
+        hashes = merged_hashes
+    return hashes[0]
 
 
 class Transaction(Streamable, JSON):
@@ -90,6 +119,12 @@ class Transaction(Streamable, JSON):
         stream.write_varint_le(self.number_of_outputs)
         for tx_output in self.outputs:
             stream.write_stream(tx_output.to_stream())
+        for witness in self.witnesses:
+            stream.write_varint_le(len(witness))
+            for stack_item in witness:
+                stream.write_varint_le(len(stack_item))
+                stream.write_bytes(stack_item)
+        stream.write_u32_le(self.locktime)
 
     def fill_from_stream(self, stream):
         self.version = stream.read_u32_le()
@@ -184,11 +219,11 @@ class Transaction(Streamable, JSON):
 
 
 class Block(Streamable, JSON):
-    def __init__(self, previous_block_hash=bytes(range(32)), version=2):
+    def __init__(self, previous_block_hash=bytes(range(32)), version=0x20000000):
         self.version = version
         self.previous_block_hash = previous_block_hash
-        self.merke_root_hash = bytes(range(32))
-        self.time = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp())
+        self.merke_root_hash = bytes(32)
+        self.set_time_to_now()
         self.bits = 0x207FFFFF
         self.nonce = 0
         self.number_of_transactions = 0
@@ -217,8 +252,18 @@ class Block(Streamable, JSON):
         for _ in range(self.number_of_transactions):
             self.transactions.append(Transaction.from_stream(stream))
 
+    def set_time_to_now(self):
+        self.time = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp())
+
+    def add_transaction(self, transaction):
+        self.number_of_transactions += 1
+        self.transactions.append(transaction)
+        self.merke_root_hash = self.merkle_root()
+
     def merkle_root(self):
-        return bytes(32)
+        if self.number_of_transactions < 1:
+            return bytes(32)
+        return merkle_root([transaction.txid() for transaction in self.transactions])
 
     def block_hash(self):
         stream = Stream()
@@ -229,6 +274,20 @@ class Block(Streamable, JSON):
         stream.write_u32_le(self.bits)
         stream.write_u32_le(self.nonce)
         return sha256(sha256(stream.data).digest()).digest()
+
+    def mine(self):
+        exponent = self.bits >> 24
+        mantissa = self.bits & 0x00FFFFFF
+        difficulty = mantissa * 2 ** (8 * (exponent - 3))
+        print(difficulty)
+        while True:
+            for i in range(0, 0xFFFFFFFF):
+                self.nonce = i
+                proof_of_work = int.from_bytes(self.block_hash(), byteorder="little")
+                if proof_of_work < difficulty:
+                    print(proof_of_work)
+                    return
+            self.set_time_to_now()
 
     def to_dict(self):
         return {
@@ -241,3 +300,65 @@ class Block(Streamable, JSON):
             "nonce": self.nonce,
             "transactions": [tx.to_dict() for tx in self.transactions],
         }
+
+
+class BitcoinHttpException(Exception):
+    pass
+
+
+class BitcoinHttpTimeoutException(Exception):
+    pass
+
+
+class Api:
+
+    def __init__(
+        self,
+        base_url="http://localhost:18444/",
+        timeout=30,
+        username=None,
+        password=None,
+    ):
+        self.base_url = base_url
+        self.username = username
+        self.password = password
+        self.timeout = timeout
+
+    def json_rpc(self, json_rpc_method, params=[]):
+        json_rpc_dict = {
+            "jsonrpc": "1.0",
+            "id": "stacks.py",
+            "method": json_rpc_method,
+            "params": params,
+        }
+        content = json.dumps(json_rpc_dict)
+        request = urllib.request.Request(
+            self.base_url,
+            content.encode(),
+            {"Content-Type": "application/json"},
+        )
+        request.get_method = lambda: "POST"
+        if self.username and self.password:
+            auth = base64.b64encode(
+                "{}:{}".format(self.username, self.password).encode()
+            ).decode()
+            request.add_header("Authorization", "Basic {}".format(auth))
+        try:
+            with urllib.request.urlopen(request) as response:
+                return json.loads(response.read())["result"]
+        except urllib.error.HTTPError as error:
+            raise BitcoinHttpException(
+                "{} {}: {}".format(error.status, error.reason, error.fp.read().decode())
+            ) from None
+        except urllib.error.URLError as error:
+            raise BitcoinHttpException(
+                "{} {}: {}".format(error.status, error.reason, error.fp.read().decode())
+            ) from None
+        except TimeoutError:
+            raise BitcoinHttpTimeoutException()
+
+    def get_best_block_hash(self):
+        return hex_to_bytes_reversed(self.json_rpc("getbestblockhash"))
+
+    def submit_block(self, block):
+        return self.json_rpc("submitblock", [block.to_hex()])
