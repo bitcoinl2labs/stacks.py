@@ -1,6 +1,13 @@
 from .stream import Stream, Streamable
-from .utils import bytes_to_hex, bytes_to_hex_reversed, JSON, hex_to_bytes_reversed
-from .hashing import sha256, ripemd160
+from .utils import (
+    bytes_to_hex,
+    bytes_to_hex_reversed,
+    JSON,
+    hex_to_bytes_reversed,
+    hex_to_bytes,
+)
+from .hashing import sha256, double_sha256
+from .keys import sign_der, compress_public_key, public_key_hash
 import datetime
 import urllib
 import json
@@ -8,7 +15,7 @@ import base64
 
 
 def pay_to_witness_public_key_hash(public_key):
-    return b"\x00\x14" + ripemd160(public_key).digest()
+    return b"\x00\x14" + public_key_hash(public_key)
 
 
 def witness_commitment(wtxids):
@@ -157,14 +164,12 @@ class Transaction(Streamable, JSON):
         self,
         previous_txid,
         previous_index,
-        script=bytes(32),
+        script=b"",
         sequence=0xFFFFFFFF,
-        witness=None,
     ):
         tx_input = Transaction.Input(previous_txid, previous_index, script, sequence)
         self.number_of_inputs += 1
         self.inputs.append(tx_input)
-        self.witnesses.append(witness if witness else [])
         return tx_input
 
     def add_output(self, amount, script):
@@ -173,12 +178,40 @@ class Transaction(Streamable, JSON):
         self.outputs.append(tx_output)
         return tx_output
 
-    def preimage(self):
+    def add_witness(self, witness):
+        self.witnesses.append(witness)
+
+    def preimage(self, _index, input_amount, public_key):
         stream = Stream()
         stream.write_u32_le(self.version)
+        txids_and_inputs = Stream()
         for tx_input in self.inputs:
-            stream.write_bytes(tx_input.previous_txid)
-            stream.write_u32_le(tx_input.previous_txout_index)
+            txids_and_inputs.write_bytes(tx_input.previous_txid)
+            txids_and_inputs.write_u32_le(tx_input.previous_txout_index)
+        stream.write_bytes(double_sha256(txids_and_inputs.data).digest())
+        sequences = Stream()
+        for tx_input in self.inputs:
+            sequences.write_u32_le(tx_input.sequence_no)
+        stream.write_bytes(double_sha256(sequences.data).digest())
+        stream.write_bytes(self.inputs[_index].previous_txid)
+        stream.write_u32_le(self.inputs[_index].previous_txout_index)
+        scriptcode = b"\x19\x76\xa9\x14" + public_key_hash(public_key) + b"\x88\xac"
+        stream.write_bytes(scriptcode)
+        stream.write_u64_le(input_amount)
+        stream.write_u32_le(self.inputs[_index].sequence_no)
+        outputs = Stream()
+        for tx_output in self.outputs:
+            outputs.write_stream(tx_output.to_stream())
+        stream.write_bytes(double_sha256(outputs.data).digest())
+        stream.write_u32_le(self.locktime)
+        stream.write_u32_le(0x01)  # SIGHASH_ALL
+        return double_sha256(stream.data).digest()
+
+    def sign(self, _index, input_amount, private_key, public_key):
+        return (
+            sign_der(self.preimage(_index, input_amount, public_key), private_key)
+            + b"\x01"
+        )
 
     def txid(self):
         stream = Stream()
@@ -368,3 +401,20 @@ class Api:
 
     def submit_block(self, block):
         return self.json_rpc("submitblock", [block.to_hex()])
+
+    def send_transaction(self, transaction):
+        return self.json_rpc("sendrawtransaction", [transaction.to_hex()])
+
+    def get_mempool(self):
+        return self.json_rpc("getrawmempool")
+
+    def get_transaction(self, txid):
+        return Transaction.from_bytes(
+            hex_to_bytes(self.json_rpc("getrawtransaction", [txid]))
+        )
+
+    def get_mempool_transactions(self):
+        transactions = []
+        for txid in self.get_mempool():
+            transactions.append(self.get_transaction(txid))
+        return transactions
