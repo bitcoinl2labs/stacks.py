@@ -26,7 +26,6 @@ def witness_commitment(wtxids):
 
 
 def merkle_root(items):
-    print(items)
     if not items:
         return bytes(32)
     hashes = [item for item in items]
@@ -220,7 +219,7 @@ class Transaction(Streamable, JSON):
         for tx_output in self.outputs:
             stream.write_stream(tx_output.to_stream())
         stream.write_u32_le(self.locktime)
-        return sha256(sha256(stream.data).digest()).digest()
+        return double_sha256(stream.data).digest()
 
     def wtxid(self):
         stream = Stream()
@@ -238,7 +237,7 @@ class Transaction(Streamable, JSON):
                 stream.write_varint_le(len(stack_item))
                 stream.write_bytes(stack_item)
         stream.write_u32_le(self.locktime)
-        return sha256(sha256(stream.data).digest()).digest()
+        return double_sha256(stream.data).digest()
 
     def to_dict(self):
         return {
@@ -294,6 +293,9 @@ class Block(Streamable, JSON):
     def add_transaction(self, transaction):
         self.number_of_transactions += 1
         self.transactions.append(transaction)
+        self.update_merkle_root()
+
+    def update_merkle_root(self):
         self.merkle_root_hash = self.merkle_root()
 
     def merkle_root(self):
@@ -312,6 +314,7 @@ class Block(Streamable, JSON):
         return sha256(sha256(stream.data).digest()).digest()
 
     def mine(self):
+        self.update_merkle_root()
         exponent = self.bits >> 24
         mantissa = self.bits & 0x00FFFFFF
         difficulty = mantissa * 2 ** (8 * (exponent - 3))
