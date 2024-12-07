@@ -21,13 +21,12 @@ def pay_to_witness_public_key_hash(public_key):
 def witness_commitment(wtxids):
     return (
         b"\x6a\x24\xaa\x21\xa9\xed"
-        + sha256(
-            sha256(merkle_root([bytes(32)] + wtxids) + bytes(32)).digest()
-        ).digest()
+        + double_sha256(merkle_root([bytes(32)] + wtxids) + bytes(32)).digest()
     )
 
 
 def merkle_root(items):
+    print(items)
     if not items:
         return bytes(32)
     hashes = [item for item in items]
@@ -37,9 +36,7 @@ def merkle_root(items):
 
         merged_hashes = []
         for i in range(0, len(hashes), 2):
-            merged_hashes.append(
-                sha256(sha256(hashes[i] + hashes[i + 1]).digest()).digest()
-            )
+            merged_hashes.append(double_sha256(hashes[i] + hashes[i + 1]).digest())
         hashes = merged_hashes
     return hashes[0]
 
@@ -261,7 +258,7 @@ class Block(Streamable, JSON):
     def __init__(self, previous_block_hash=bytes(range(32)), version=0x20000000):
         self.version = version
         self.previous_block_hash = previous_block_hash
-        self.merke_root_hash = bytes(32)
+        self.merkle_root_hash = bytes(32)
         self.set_time_to_now()
         self.bits = 0x207FFFFF
         self.nonce = 0
@@ -271,7 +268,7 @@ class Block(Streamable, JSON):
     def fill_stream(self, stream):
         stream.write_u32_le(self.version)
         stream.write_bytes(self.previous_block_hash)
-        stream.write_bytes(self.merke_root_hash)
+        stream.write_bytes(self.merkle_root_hash)
         stream.write_u32_le(self.time)
         stream.write_u32_le(self.bits)
         stream.write_u32_le(self.nonce)
@@ -282,7 +279,7 @@ class Block(Streamable, JSON):
     def fill_from_stream(self, stream):
         self.version = stream.read_u32_le()
         self.previous_block_hash = stream.read_bytes(32)
-        self.merke_root_hash = stream.read_bytes(32)
+        self.merkle_root_hash = stream.read_bytes(32)
         self.time = stream.read_u32_le()
         self.bits = stream.read_u32_le()
         self.nonce = stream.read_u32_le()
@@ -297,7 +294,7 @@ class Block(Streamable, JSON):
     def add_transaction(self, transaction):
         self.number_of_transactions += 1
         self.transactions.append(transaction)
-        self.merke_root_hash = self.merkle_root()
+        self.merkle_root_hash = self.merkle_root()
 
     def merkle_root(self):
         if self.number_of_transactions < 1:
@@ -308,7 +305,7 @@ class Block(Streamable, JSON):
         stream = Stream()
         stream.write_u32_le(self.version)
         stream.write_bytes(self.previous_block_hash)
-        stream.write_bytes(self.merke_root_hash)
+        stream.write_bytes(self.merkle_root_hash)
         stream.write_u32_le(self.time)
         stream.write_u32_le(self.bits)
         stream.write_u32_le(self.nonce)
@@ -333,7 +330,7 @@ class Block(Streamable, JSON):
             "version": self.version,
             "versionHex": hex(self.version).replace("0x", ""),
             "hash": bytes_to_hex_reversed(self.block_hash()),
-            "merkleroot": bytes_to_hex_reversed(self.merke_root_hash),
+            "merkleroot": bytes_to_hex_reversed(self.merkle_root_hash),
             "bits": hex(self.bits).replace("0x", ""),
             "time": self.time,
             "nonce": self.nonce,
