@@ -28,6 +28,14 @@ def script_height(height):
     return bytes((counter,)) + value
 
 
+def script_to_height(script):
+    if script[0] == 0:
+        return 0
+    if script[0] >= 0x50:
+        return script[0] - 0x50
+    return int.from_bytes(script[1 : 1 + script[0]], byteorder="little")
+
+
 def pay_to_witness_public_key_hash(public_key):
     return b"\x00\x14" + public_key_hash(public_key)
 
@@ -342,6 +350,11 @@ class Block(Streamable, JSON):
                     return
             self.set_time_to_now()
 
+    def height(self):
+        for tx_input in self.transactions[0].inputs:
+            if tx_input.previous_txid == bytes(32):
+                return script_to_height(tx_input.txin_script)
+
     def to_dict(self):
         return {
             "version": self.version,
@@ -435,3 +448,14 @@ class Api:
 
     def get_block_count(self):
         return self.json_rpc("getblockcount")
+
+    def get_block_by_hash(self, block_hash: bytes):
+        return Block.from_bytes(
+            hex_to_bytes(
+                self.json_rpc("getblock", [bytes_to_hex_reversed(block_hash), 0])
+            )
+        )
+
+    def get_block_by_height(self, height):
+        block_hash = hex_to_bytes_reversed(self.json_rpc("getblockhash", [height]))
+        return self.get_block_by_hash(block_hash)
