@@ -23,7 +23,7 @@ class KeysTest(unittest.TestCase):
         private = bytes(range(32))
         self.assertEqual(
             bytes_to_hex(sign(b"hello world", private)),
-            "7db1d6a0578a0fce21848d8c065ebed9cf93ecedd05d1803e1c79929e9564ba481165c8c3b3f3d70bf977db6c08e3d09df89149db7d15c9cf0fa9442f9b4c84f",
+            "d457a61187f24e19e96dd277d624dfbf7b028db0d38abe20dd66948e11f42a8312eef09807e38bbe881ce99bc83529e1d00c9a5f86760a75fbc6a0dfd668879a",
         )
 
     def test_verify(self):

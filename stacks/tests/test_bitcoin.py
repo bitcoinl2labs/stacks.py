@@ -28,12 +28,10 @@ class TransactionTest(unittest.TestCase):
         private_key = bytes(range(32))
         verifying_key = get_verifying_key(private_key)
         tx = Transaction()
-        tx.add_input(
-            previous_txid=bytes(32), previous_index=0xFFFFFFFF, witness=[bytes(32)]
-        )
+        tx.add_input(previous_txid=bytes(32), previous_index=0xFFFFFFFF)
         tx.add_output(50, pay_to_witness_public_key_hash(verifying_key))
         tx.add_output(0, witness_commitment([]))
         self.assertEqual(
             bytes_to_hex_reversed(tx.txid()),
-            "896e2de629d8acee0e3c30aa7a9ae48e57c28fa05866267be1cc4040c4c5351e",
+            "40615d7aff27ca3eab1b1e3d6d6595cbdfca640acc88b44006308efdea3e26ee",
         )

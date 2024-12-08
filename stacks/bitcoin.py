@@ -14,6 +14,20 @@ import json
 import base64
 
 
+def script_height(height):
+    if height == 0:
+        return b"\x00\x00"
+    if height <= 16:
+        return bytes((0x50 + height,)) + b"\x00"
+    counter = 0
+    value = b""
+    while height:
+        value += bytes((height & 0xFF,))
+        counter += 1
+        height >>= 8
+    return bytes((counter,)) + value
+
+
 def pay_to_witness_public_key_hash(public_key):
     return b"\x00\x14" + public_key_hash(public_key)
 
@@ -290,7 +304,7 @@ class Block(Streamable, JSON):
     def set_time_to_now(self):
         self.time = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp())
 
-    def add_transaction(self, transaction):
+    def add_transaction(self, transaction: Transaction):
         self.number_of_transactions += 1
         self.transactions.append(transaction)
         self.update_merkle_root()
@@ -303,7 +317,7 @@ class Block(Streamable, JSON):
             return bytes(32)
         return merkle_root([transaction.txid() for transaction in self.transactions])
 
-    def block_hash(self):
+    def block_hash(self) -> bytes:
         stream = Stream()
         stream.write_u32_le(self.version)
         stream.write_bytes(self.previous_block_hash)
@@ -418,3 +432,6 @@ class Api:
         for txid in self.get_mempool():
             transactions.append(self.get_transaction(txid))
         return transactions
+
+    def get_block_count(self):
+        return self.json_rpc("getblockcount")
