@@ -1,6 +1,7 @@
 import urllib
 import urllib.request
 import json
+from .block import Block
 
 
 class StacksHttpException(Exception):
@@ -35,7 +36,7 @@ class Api:
             raise StacksHttpTimeoutException()
 
     def get_block_by_height(self, height):
-        return self.request_get("/v3/blocks/height/{}".format(height))
+        return Block.from_bytes(self.request_get("/v3/blocks/height/{}".format(height)))
 
     def post_transaction(self, transaction):
         content = transaction.serialize()

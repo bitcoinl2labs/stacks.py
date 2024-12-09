@@ -1,49 +1,73 @@
 import datetime
 from .hashing import sha512_256
 from .address import c32_encode
+from .stream import Stream, Streamable
 from .transaction import Transaction
+from .utils import JSON, bytes_to_hex
 
 
-class Block:
+class Block(Streamable, JSON):
 
-    def __init__(self):
-       pass
-    
+    def __init__(self, previous_block_hash=bytes(range(32)), version=0x20000000):
+        self.version = version
+        """
+        self.previous_block_hash = previous_block_hash
+        self.merkle_root_hash = bytes(32)
+        self.set_time_to_now()
+        self.bits = 0x207FFFFF
+        self.nonce = 0
+        self.number_of_transactions = 0
+        self.transactions = []
+        """
+
+    def fill_stream(self, stream):
+        stream.write_u32_le(self.version)
+        stream.write_bytes(self.previous_block_hash)
+        stream.write_bytes(self.merkle_root_hash)
+        stream.write_u32_le(self.time)
+        stream.write_u32_le(self.bits)
+        stream.write_u32_le(self.nonce)
+        stream.write_varint_le(self.number_of_transactions)
+        for transaction in self.transactions:
+            stream.write_stream(transaction.to_stream())
+
     def fill_from_stream(self, stream):
-        self.version = stream.next_u8()
-        self.chain_length = stream.next_u64()
-        self.burn_spent = stream.next_u64()
+        print(stream.data)
+        self.version = stream.read_u8()
+        self.chain_length = stream.read_u64_be()
+        self.burn_spent = stream.read_u64_be()
 
-        self.consensus_hash = stream.next_blob(20)
-        self.parent_block_id = stream.next_blob(32)
-        self.tx_merkle_root = stream.next_blob(32)
-        self.state_index_root = stream.next_blob(32)
+        self.consensus_hash = stream.read_bytes(20)
+        self.parent_block_id = stream.read_bytes(32)
+        self.tx_merkle_root = stream.read_bytes(32)
+        self.state_index_root = stream.read_bytes(32)
 
-        self.timestamp = stream.next_u64()
+        self.timestamp = stream.read_u64_be()
 
-        self.miner_signature = stream.next_blob(65)
+        self.miner_signature = stream.read_bytes(65)
 
         block_header_end = stream.pos
 
-        signer_signature_len = stream.next_u32()
+        signer_signatures_len = stream.read_u32_be()
 
-        self.signer_signature = []
-        for i in range(0, signer_signature_len):
-            self.signer_signature.append(stream.next_blob(65))
+        self.signer_signatures = []
+        for i in range(0, signer_signatures_len):
+            self.signer_signatures.append(stream.read_bytes(65))
 
         pox_treatment_start = stream.pos
 
-        pox_treatment_len = stream.next_u16()
+        self.pox_treatment_len = stream.read_u16_be()
 
-        pox_treatment_data_len = stream.next_u32()
-
-        stream.pos += pox_treatment_data_len
+        pox_treatment_data_len = stream.read_u32_be()
+        self.pox_treatment = stream.read_bytes(pox_treatment_data_len)
 
         pox_treatment_end = stream.pos
 
         self.txs = []
 
-        txs_len = stream.next_u32()
+        txs_len = stream.read_u32_be()
+
+        return
 
         for i in range(0, txs_len):
             tx_offset = self.pos
@@ -141,23 +165,41 @@ class Block:
         print("pox_treatment:", pox_treatment_len)
         print("txs:", self.txs)
         print(self.data[self.pos :])
-        
+
     def block_hash(self):
-        """
-        write_next(fd, &self.version)?;
-        write_next(fd, &self.chain_length)?;
-        write_next(fd, &self.burn_spent)?;
-        write_next(fd, &self.consensus_hash)?;
-        write_next(fd, &self.parent_block_id)?;
-        write_next(fd, &self.tx_merkle_root)?;
-        write_next(fd, &self.state_index_root)?
-        write_next(fd, &self.timestamp)?;
-        write_next(fd, &self.miner_signature)?;
-        write_next(fd, &self.pox_treatment)?;
-        Ok(Sha512Trunc256Sum::from_hasher(hasher))
-        """
-        
+        stream = Stream()
+        stream.write_u8(self.version)
+        stream.write_u64_be(self.chain_length)
+        stream.write_u64_be(self.burn_spent)
+        stream.write_bytes(self.consensus_hash)
+        stream.write_bytes(self.parent_block_id)
+        stream.write_bytes(self.tx_merkle_root)
+        stream.write_bytes(self.state_index_root)
+        stream.write_u64_be(self.timestamp)
+        stream.write_bytes(self.miner_signature)
+        stream.write_u16_be(self.pox_treatment_len)
+        stream.write_u32_be(len(self.pox_treatment))
+        stream.write_bytes(self.pox_treatment)
+        return sha512_256(stream.data).digest()
+
     def block_id(self):
         """
         StacksBlockId::new(&self.consensus_hash, &self.block_hash())
         """
+
+    def block_height(self):
+        return self.chain_length
+
+    def to_dict(self):
+        return {
+            "version": self.version,
+            "versionHex": hex(self.version).replace("0x", ""),
+            "height": self.block_height(),
+            "block_hash": bytes_to_hex(self.block_hash()),
+            "timestamp": self.timestamp,
+            # "hash": bytes_to_hex_reversed(self.block_hash()),
+            # "merkleroot": bytes_to_hex_reversed(self.merkle_root_hash),
+            # "time": self.time,
+            # "nonce": self.nonce,
+            # "transactions": [tx.to_dict() for tx in self.transactions],
+        }
