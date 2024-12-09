@@ -32,7 +32,6 @@ class Block(Streamable, JSON):
             stream.write_stream(transaction.to_stream())
 
     def fill_from_stream(self, stream):
-        print(stream.data)
         self.version = stream.read_u8()
         self.chain_length = stream.read_u64_be()
         self.burn_spent = stream.read_u64_be()
@@ -182,6 +181,9 @@ class Block(Streamable, JSON):
         stream.write_bytes(self.pox_treatment)
         return sha512_256(stream.data).digest()
 
+    def index_block_hash(self):
+        return sha512_256(self.block_hash() + self.consensus_hash).digest()
+
     def block_id(self):
         """
         StacksBlockId::new(&self.consensus_hash, &self.block_hash())
@@ -196,6 +198,7 @@ class Block(Streamable, JSON):
             "versionHex": hex(self.version).replace("0x", ""),
             "height": self.block_height(),
             "block_hash": bytes_to_hex(self.block_hash()),
+            "index_block_hash": bytes_to_hex(self.index_block_hash()),
             "timestamp": self.timestamp,
             # "hash": bytes_to_hex_reversed(self.block_hash()),
             # "merkleroot": bytes_to_hex_reversed(self.merkle_root_hash),

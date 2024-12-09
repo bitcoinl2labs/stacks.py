@@ -2,6 +2,7 @@ import urllib
 import urllib.request
 import json
 from .block import Block
+from .utils import bytes_to_hex
 
 
 class StacksHttpException(Exception):
@@ -37,6 +38,11 @@ class Api:
 
     def get_block_by_height(self, height):
         return Block.from_bytes(self.request_get("/v3/blocks/height/{}".format(height)))
+
+    def get_block(self, index_block_hash):
+        return Block.from_bytes(
+            self.request_get("/v3/blocks/{}".format(bytes_to_hex(index_block_hash)))
+        )
 
     def post_transaction(self, transaction):
         content = transaction.serialize()
